@@ -41,62 +41,6 @@ const MapComponent = () => {
       setController(controller);
     });
 
-    const layers = ["wind-dir"];
-    const frameCount = 100; // Number of animation steps
-    let currentFrame = 0; // To track the current animation frame
-    const startMinutes = 0;
-    const endMinutes = 3600;
-    const interval = (endMinutes - startMinutes) / frameCount;
-
-const updateLayer = () => {
-  const timeOffset = startMinutes + interval * currentFrame;
-  const windLayerURL = `https://maps1.aerisapi.com/7iOMMin2RrTNIZYn1q9JM_ERiP8vXlA7TyFc6HuiTpRFXqTyTjWw4r0TqajvKb/wind-dir/{z}/{x}/{y}/${timeOffset}min.png`;
-
-  const nextLayerId = currentFrame % 2 === 0 ? "aerisWeatherLayer1" : "aerisWeatherLayer2";
-  const prevLayerId = currentFrame % 2 === 0 ? "aerisWeatherLayer2" : "aerisWeatherLayer1";
-
-  if (map.getSource(nextLayerId)) {
-    map.removeLayer(nextLayerId);
-    map.removeSource(nextLayerId);
-  }
-
-  map.addSource(nextLayerId, {
-    type: "raster",
-    tiles: [windLayerURL],
-    tileSize: 256,
-  });
-
-  map.addLayer({
-    id: nextLayerId,
-    type: "raster",
-    source: nextLayerId,
-    paint: {
-      "raster-opacity": 0,
-    },
-  });
-
-  // Fade out the old layer and fade in the new one
-  map.setPaintProperty(nextLayerId, "raster-opacity", 0.8);
-  map.setPaintProperty(prevLayerId, "raster-opacity", 0);
-};
-
-
-    // Update the animation frame every second (or any interval you want)
-    const animationInterval = setInterval(() => {
-      currentFrame = (currentFrame + 1) % frameCount; // Cycle through frames
-      updateLayer();
-    }, 1000); // 1-second interval between frames
-
-    // Cleanup on component unmount
-    return () => {
-      if (controllerRef.current) {
-        controllerRef.current.removeLegendControl();
-        if (controllerRef.current.hasWeatherLayer("wind-particles")) {
-          controllerRef.current.removeWeatherLayer("wind-particles");
-        }
-      }
-      clearInterval(animationInterval); // Stop animation
-    };
   }, [setMap, setController]);
 
   return (
