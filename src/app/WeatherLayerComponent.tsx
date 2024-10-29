@@ -1,135 +1,145 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useMapStore } from "./store/mapStore";
+import styles from "./WeatherLayerComponent.module.css";
 
 const WeatherLayerComponent = () => {
   const { mapRef, controllerRef } = useMapStore();
-  const [layerAdded, setLayerAdded] = useState(false);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [sliderValue, setSliderValue] = useState(0); // assuming max value is 1
+  const [currentTime, setCurrentTime] = useState("");
 
-  // Function to add the weather layer
-  const addLayer = () => {
-    if (controllerRef && mapRef && !layerAdded) {
-      controllerRef.addWeatherLayer("temperatures", {
-        paint: {
-          // sample: {
-          //   colorscale: {
-          //     normalized: true,
-          //     stops: [
-          //       0,
-          //       "#0b0089",
-          //       0.25,
-          //       "#8800a8",
-          //       0.5,
-          //       "#cf4875",
-          //       0.75,
-          //       "#f99336",
-          //       1,
-          //       "#f0fb00",
-          //     ],
-          //   },
-          // },
-          particle: {
-            count: Math.pow(256, 2), // 65536 particles
-            size: 1,
-            speed: 2,
-            trailsFade: 0.9,
-          },
-        },
-      });
-      console.log("Weather layer added.");
-      setLayerAdded(true); // Mark the layer as added
-    }
+  // Format time to 12-hour format with AM/PM
+  const formatDate = (date: Date) => {
+    return date.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true // Use 12-hour format
+    });
   };
 
-  // Function to remove the weather layer
-  const removeLayerAndLegend = () => {
-    if (controllerRef && layerAdded) {
-      controllerRef.removeWeatherLayer("temperatures");
-      console.log("Weather layer removed.");
-      setLayerAdded(false); // Update state to indicate the layer is removed
-    } else {
-      console.log("Layer has not been added yet or is already removed.");
-    }
-  };
+  const generateTimeLabels = (startDate: Date, endDate: Date) => {
+    const labels: string[] = [];
+    const start = startDate.getTime();
+    const end = endDate.getTime();
+    const oneHour = 60 * 60 * 1000; // One hour in milliseconds
 
-  // Function to update the timeline to a specific start or end date
-  const updateTimeline = (date:any) => {
-    if (controllerRef && controllerRef.timeline && date) {
-      const targetDate = new Date(date);
-      controllerRef.timeline.goTo(targetDate.getTime() / 1000); // Convert to seconds if necessary
-      console.log(`Timeline moved to ${targetDate}`);
-    }
-  };
+    // Ensure the end time is within 6 hours of the start time
+    const adjustedEnd = start + (6 * oneHour);
 
-  // Play and Pause Timeline
-  const playTimeline = () => {
-    if (controllerRef && controllerRef.timeline) {
-      if (isPlaying) {
-        controllerRef.timeline.stop(); // Stop the timeline if it is playing
-        setIsPlaying(false);
-      } else {
-        controllerRef.timeline.play(); // Start or resume the timeline
-        setIsPlaying(true);
+    // Generate labels for every hour within the 6-hour window
+    for (let time = start; time <= Math.min(end, adjustedEnd); time += oneHour) {
+      const label = formatDate(new Date(time));
+      // Only add the label if it is not already included
+      if (!labels.includes(label)) {
+        labels.push(label);
       }
     }
-  };
-
-  const pauseTimeline = () => {
-    if (controllerRef && controllerRef.timeline) {
-      controllerRef.timeline.pause();
-      setIsPlaying(false); // Ensure play button can be used to resume after pause
-    }
+    return labels;
   };
 
   useEffect(() => {
-    return () => {
-      if (controllerRef && layerAdded) {
-        controllerRef.removeWeatherLayer("temperatures");
-        console.log("Weather layer removed during cleanup.");
-      }
-    };
-  }, [controllerRef, layerAdded]);
+    if (controllerRef) {
+      controllerRef.addWeatherLayer("radar");
+
+      const controller = controllerRef;
+
+      // Update the slider and current time label
+      const updateTimelineLabel = () => {
+        setSliderValue(controller.timeline.position);
+        setCurrentTime(formatDate(controller.timeline.currentDate));
+      };
+
+      // Loading indicators
+      controller.on("load:start", () => setLoading(true));
+      controller.on("load:complete", () => setLoading(false));
+
+      // Timeline event listeners
+      controller.timeline.on(
+        "advance",
+        ({ position, date }: { position: number; date: Date }) => {
+          setSliderValue(position);
+          setCurrentTime(formatDate(date));
+        }
+      );
+      controller.timeline.on("range:change", () => {
+        updateTimelineLabel();
+      });
+
+      return () => {
+        // Cleanup event listeners
+        controller.timeline.off("advance");
+        controller.timeline.off("range:change");
+        controller.off("load:start");
+        controller.off("load:complete");
+      };
+    }
+  }, [controllerRef]);
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      controllerRef.timeline.stop();
+    } else {
+      controllerRef.timeline.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    setSliderValue(value);
+    controllerRef.timeline.goTo(value);
+    controllerRef.timeline.pause(); // Pause when user manually changes the slider
+  };
+
+  // Generate time labels only when the component mounts or timeline changes
+  const timeLabels = generateTimeLabels(new Date(controllerRef?.timeline.startDate), new Date(controllerRef?.timeline.endDate));
 
   return (
     <div>
-      <div style={{ position: "absolute", top: "10px", left: "10px", zIndex: 1 }}>
-        <button onClick={addLayer} disabled={layerAdded}>
-          Add Layer
+      <div id="map" style={{ width: "100%", height: "400px" }}></div>
+      <div
+        id="controls"
+        style={{ position: "absolute", top: "10px", left: "10px", zIndex: 1 }}
+        className={styles.controls}
+      >
+        <button className={styles.btnPlay} onClick={handlePlayPause}>
+          {isPlaying ? "Stop" : "Play"}
         </button>
-        <button onClick={removeLayerAndLegend} disabled={!layerAdded}>
-          Remove Layer
-        </button>
-              {/* Date pickers for start and end dates */}
-      <div style={{ marginTop: "20px" }}>
-        <label>Start Date:</label>
-        <input
-          type="date"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-        />
-        <button onClick={() => updateTimeline(startDate)}>Go to Start Date</button>
-
-        <label>End Date:</label>
-        <input
-          type="date"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-        />
-        <button onClick={() => updateTimeline(endDate)}>Go to End Date</button>
+        <div className={styles.divider}></div>
+        <div className={styles.sliderContainer}>
+          {/* Render static time labels every hour */}
+          <div className={styles.timeLabels}>
+            {timeLabels.map((label, index) => (
+              <div key={index} className={styles.timeLabel}>
+                {label}
+              </div>
+            ))}
+          </div>
+          <input
+            id="timeline-slider"
+            type="range"
+            min="0"
+            max="1"
+            value={sliderValue}
+            step="0.01"
+            onChange={handleSliderChange}
+            className={styles.timelineSlider}
+          />
+          <div className={styles.timeDisplay}>{currentTime}</div>
+        </div>
+        {loading && (
+          <div className={styles.loader}>
+            <div className={styles.ring}>
+              <div></div>
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Timeline Play/Pause Controls */}
-      <div style={{ marginTop: "10px" }}>
-        <button onClick={playTimeline}>{isPlaying ? "Stop" : "Play"}</button>
-        <button onClick={pauseTimeline} disabled={!isPlaying}>
-          Pause
-        </button>
-      </div>
-      </div>
-
     </div>
   );
 };

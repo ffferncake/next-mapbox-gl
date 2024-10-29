@@ -27,8 +27,8 @@ const MapComponent = () => {
     });
 
     const account = new mapsgl.Account(
-      "7iOMMin2RrTNIZYn1q9JM",
-      "ERiP8vXlA7TyFc6HuiTpRFXqTyTjWw4r0TqajvKb"
+      "dj3hazg1e9Evj9EcFg9fz",
+      "6ngFwXzTQx7scqQbSeXGUlvWVS8IcAL4KzeHOsBc"
     );
 
     const controller = new mapsgl.MapboxMapController(map, {
